@@ -34,6 +34,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -114,6 +115,118 @@ fun BeastLogo(
                 letterSpacing = 1.sp
             )
         }
+    }
+}
+
+// -------------------------------------------------------------
+// REUSABLE HIGH-FIDELITY ANIMATED HEART LIKE BUTTON WITH CELEBRATION
+// -------------------------------------------------------------
+@Composable
+fun AnimatedFavoriteButton(
+    isFavorite: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    iconSize: androidx.compose.ui.unit.Dp = 18.dp,
+    containerSize: androidx.compose.ui.unit.Dp = 36.dp,
+    heartSelectedColor: Color = HeartRed,
+    heartUnselectedColor: Color = SecondaryCharcoal
+) {
+    val heartScale = remember { Animatable(1f) }
+    val celebrateProgress = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    val haptic = LocalHapticFeedback.current
+
+    LaunchedEffect(isFavorite) {
+        if (isFavorite) {
+            launch {
+                heartScale.snapTo(0f)
+                heartScale.animateTo(
+                    targetValue = 1f,
+                    animationSpec = keyframes {
+                        durationMillis = 500
+                        0f at 0 with FastOutSlowInEasing
+                        1.2f at 250 with FastOutSlowInEasing
+                        1.0f at 500
+                    }
+                )
+            }
+            launch {
+                celebrateProgress.snapTo(0f)
+                celebrateProgress.animateTo(
+                    targetValue = 1f,
+                    animationSpec = tween(durationMillis = 500, easing = LinearEasing)
+                )
+            }
+        } else {
+            launch {
+                heartScale.snapTo(1f)
+            }
+            launch {
+                celebrateProgress.snapTo(0f)
+            }
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .size(containerSize)
+            .clip(CircleShape)
+            .clickable {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                onClick()
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        // Celebrate explosion lines overlay
+        val celebrateScale = celebrateProgress.value * 1.2f
+        val celebrateAlpha = if (celebrateProgress.value <= 0.5f) {
+            1.0f - celebrateProgress.value * 0.4f
+        } else {
+            (1.0f - celebrateProgress.value) * 1.6f
+        }
+
+        if (celebrateProgress.value > 0f && celebrateProgress.value < 1f) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val width = size.width
+                val height = size.height
+
+                scale(
+                    scale = celebrateScale,
+                    pivot = Offset(width / 2f, height / 2f)
+                ) {
+                    val strokeWidthPx = 1.8.dp.toPx()
+
+                    fun drawRay(x1: Float, y1: Float, x2: Float, y2: Float) {
+                        drawLine(
+                            color = heartSelectedColor,
+                            start = Offset(x1 * width / 100f, y1 * height / 100f),
+                            end = Offset(x2 * width / 100f, y2 * height / 100f),
+                            strokeWidth = strokeWidthPx,
+                            cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                            alpha = celebrateAlpha
+                        )
+                    }
+
+                    // Radiating celebratory ray lines matching the core web CSS specification
+                    drawRay(15f, 15f, 28f, 28f)
+                    drawRay(12f, 50f, 28f, 50f)
+                    drawRay(22f, 78f, 32f, 68f)
+                    drawRay(88f, 12f, 72f, 28f)
+                    drawRay(88f, 50f, 72f, 50f)
+                    drawRay(78f, 78f, 68f, 68f)
+                }
+            }
+        }
+
+        // Heart Icon
+        Icon(
+            imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+            contentDescription = "Favorite Heart Icon",
+            tint = if (isFavorite) heartSelectedColor else heartUnselectedColor,
+            modifier = Modifier
+                .size(iconSize)
+                .scale(heartScale.value)
+        )
     }
 }
 
@@ -872,6 +985,14 @@ fun HomeScreen(viewModel: BeastViewModel, innerPadding: PaddingValues) {
                                 if (isCatSelected) 8.dp else 2.dp,
                                 RoundedCornerShape(30.dp)
                             )
+                            .then(
+                                if (isCatSelected) Modifier
+                                else Modifier.border(
+                                    width = 1.dp,
+                                    color = SecondaryCharcoal.copy(alpha = 0.08f),
+                                    shape = RoundedCornerShape(30.dp)
+                                )
+                            )
                             .clickable {
                                 if (isCatSelected) {
                                     viewModel.selectCategory(null)
@@ -903,9 +1024,9 @@ fun HomeScreen(viewModel: BeastViewModel, innerPadding: PaddingValues) {
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = cat.name.split(" ").firstOrNull() ?: cat.name,
-                                color = if (isCatSelected) Color.White else SecondaryCharcoal,
+                                color = SecondaryCharcoal,
                                 fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold,
+                                fontWeight = FontWeight.Bold,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -1199,22 +1320,17 @@ fun ProductGridItem(
                     .clip(RoundedCornerShape(30.dp))
             )
 
-            // Favorited heart icon floating top-right
-            IconButton(
+            // Favorited heart icon floating top-right with custom spring celebrate animation
+            AnimatedFavoriteButton(
+                isFavorite = isFavorite,
                 onClick = onToggleFavorite,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(10.dp)
-                    .size(36.dp)
-                    .background(Color.White.copy(alpha = 0.88f), CircleShape)
-            ) {
-                Icon(
-                    imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-                    contentDescription = "Fav",
-                    tint = if (isFavorite) HeartRed else SecondaryCharcoal,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
+                    .background(Color.White.copy(alpha = 0.88f), CircleShape),
+                containerSize = 36.dp,
+                iconSize = 18.dp
+            )
 
             // Simple rating float indicator
             Box(
@@ -1330,15 +1446,23 @@ fun SearchScreen(viewModel: BeastViewModel, innerPadding: PaddingValues) {
                     focusedBorderColor = PrimaryLime,
                     unfocusedBorderColor = Color.Transparent,
                     focusedContainerColor = Color.White,
-                    unfocusedContainerColor = Color.White
+                    unfocusedContainerColor = Color.White,
+                    focusedTextColor = SecondaryCharcoal,
+                    unfocusedTextColor = SecondaryCharcoal,
+                    focusedPlaceholderColor = MutedText,
+                    unfocusedPlaceholderColor = MutedText,
+                    focusedLeadingIconColor = SecondaryCharcoal,
+                    unfocusedLeadingIconColor = SecondaryCharcoal,
+                    focusedTrailingIconColor = SecondaryCharcoal,
+                    unfocusedTrailingIconColor = SecondaryCharcoal
                 ),
                 singleLine = true,
                 modifier = Modifier.weight(1f)
             )
         }
-
+ 
         Spacer(modifier = Modifier.height(16.dp))
-
+ 
         // Quick Category selection chips
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(text = "Filters:", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = SecondaryCharcoal)
@@ -1351,6 +1475,11 @@ fun SearchScreen(viewModel: BeastViewModel, innerPadding: PaddingValues) {
                         modifier = Modifier
                             .clip(RoundedCornerShape(16.dp))
                             .background(if (isSelected) PrimaryLime else Color.White)
+                            .border(
+                                width = 1.dp,
+                                color = if (isSelected) Color.Transparent else SecondaryCharcoal.copy(alpha = 0.12f),
+                                shape = RoundedCornerShape(16.dp)
+                            )
                             .clickable {
                                 if (catItem == "All") viewModel.selectCategory(null) else viewModel.selectCategory(catItem)
                             }
@@ -1358,7 +1487,7 @@ fun SearchScreen(viewModel: BeastViewModel, innerPadding: PaddingValues) {
                     ) {
                         Text(
                             text = catItem,
-                            color = if (isSelected) Color.White else SecondaryCharcoal,
+                            color = SecondaryCharcoal,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -1366,12 +1495,18 @@ fun SearchScreen(viewModel: BeastViewModel, innerPadding: PaddingValues) {
                 }
             }
         }
-
+ 
         Spacer(modifier = Modifier.height(20.dp))
-
+ 
         // Results listing grid
         if (filteredProducts.isEmpty()) {
-            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .padding(24.dp),
+                contentAlignment = Alignment.Center
+            ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(
                         imageVector = Icons.Default.RunningWithErrors,
@@ -1383,12 +1518,17 @@ fun SearchScreen(viewModel: BeastViewModel, innerPadding: PaddingValues) {
                     Text(
                         text = "No athletic gear matched search",
                         fontWeight = FontWeight.Bold,
-                        color = SecondaryCharcoal
+                        color = SecondaryCharcoal,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
                     )
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = "Try switching category filters or keywords.",
                         fontSize = 11.sp,
-                        color = MutedText
+                        color = MutedText,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
             }
@@ -1539,20 +1679,16 @@ fun ProductDetailScreen(viewModel: BeastViewModel, innerPadding: PaddingValues) 
                 }
 
                 // Heart favourite floating container
-                IconButton(
+                AnimatedFavoriteButton(
+                    isFavorite = isFav,
                     onClick = { viewModel.toggleFavorite(product.id) },
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(16.dp)
-                        .size(44.dp)
-                        .background(Color.White, CircleShape)
-                ) {
-                    Icon(
-                        imageVector = if (isFav) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-                        contentDescription = "Fav product",
-                        tint = if (isFav) HeartRed else SecondaryCharcoal
-                    )
-                }
+                        .background(Color.White, CircleShape),
+                    containerSize = 44.dp,
+                    iconSize = 22.dp
+                )
             }
 
             Spacer(modifier = Modifier.height(10.dp))
@@ -1602,18 +1738,14 @@ fun ProductDetailScreen(viewModel: BeastViewModel, innerPadding: PaddingValues) 
                         modifier = Modifier.weight(1f)
                     )
                     Spacer(modifier = Modifier.width(10.dp))
-                    IconButton(
+                    AnimatedFavoriteButton(
+                        isFavorite = isFav,
                         onClick = { viewModel.toggleFavorite(product.id) },
                         modifier = Modifier
-                            .size(44.dp)
-                            .background(Color.White, CircleShape)
-                    ) {
-                        Icon(
-                            imageVector = if (isFav) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-                            contentDescription = null,
-                            tint = if (isFav) HeartRed else SecondaryCharcoal
-                        )
-                    }
+                            .background(Color.White, CircleShape),
+                        containerSize = 44.dp,
+                        iconSize = 22.dp
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(14.dp))
@@ -1946,7 +2078,17 @@ fun ProductDetailScreen(viewModel: BeastViewModel, innerPadding: PaddingValues) 
                         onValueChange = { restockEmail = it },
                         placeholder = { Text("Enter your email address") },
                         singleLine = true,
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = SecondaryCharcoal,
+                            unfocusedTextColor = SecondaryCharcoal,
+                            focusedBorderColor = PrimaryLime,
+                            unfocusedBorderColor = Color.LightGray,
+                            focusedContainerColor = Color.White,
+                            unfocusedContainerColor = Color.White,
+                            focusedPlaceholderColor = MutedText,
+                            unfocusedPlaceholderColor = MutedText
+                        )
                     )
                 }
             },
@@ -2137,7 +2279,14 @@ fun CartScreen(viewModel: BeastViewModel, innerPadding: PaddingValues) {
                             singleLine = true,
                             modifier = Modifier.weight(1f),
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = PrimaryLime
+                                focusedTextColor = SecondaryCharcoal,
+                                unfocusedTextColor = SecondaryCharcoal,
+                                focusedBorderColor = PrimaryLime,
+                                unfocusedBorderColor = Color.LightGray,
+                                focusedContainerColor = Color.White,
+                                unfocusedContainerColor = Color.White,
+                                focusedPlaceholderColor = MutedText,
+                                unfocusedPlaceholderColor = MutedText
                             )
                         )
                         Spacer(modifier = Modifier.width(10.dp))
@@ -2424,7 +2573,17 @@ fun CheckoutScreen(viewModel: BeastViewModel, innerPadding: PaddingValues) {
                         label = { Text("Full Name") },
                         shape = RoundedCornerShape(12.dp),
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = SecondaryCharcoal,
+                            unfocusedTextColor = SecondaryCharcoal,
+                            focusedBorderColor = PrimaryLime,
+                            unfocusedBorderColor = Color.LightGray,
+                            focusedContainerColor = Color.White,
+                            unfocusedContainerColor = Color.White,
+                            focusedLabelColor = SecondaryCharcoal,
+                            unfocusedLabelColor = MutedText
+                        )
                     )
                     OutlinedTextField(
                         value = phoneNumber,
@@ -2433,14 +2592,34 @@ fun CheckoutScreen(viewModel: BeastViewModel, innerPadding: PaddingValues) {
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                         shape = RoundedCornerShape(12.dp),
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = SecondaryCharcoal,
+                            unfocusedTextColor = SecondaryCharcoal,
+                            focusedBorderColor = PrimaryLime,
+                            unfocusedBorderColor = Color.LightGray,
+                            focusedContainerColor = Color.White,
+                            unfocusedContainerColor = Color.White,
+                            focusedLabelColor = SecondaryCharcoal,
+                            unfocusedLabelColor = MutedText
+                        )
                     )
                     OutlinedTextField(
                         value = deliveryAddress,
                         onValueChange = { deliveryAddress = it },
                         label = { Text("Full Address") },
                         shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = SecondaryCharcoal,
+                            unfocusedTextColor = SecondaryCharcoal,
+                            focusedBorderColor = PrimaryLime,
+                            unfocusedBorderColor = Color.LightGray,
+                            focusedContainerColor = Color.White,
+                            unfocusedContainerColor = Color.White,
+                            focusedLabelColor = SecondaryCharcoal,
+                            unfocusedLabelColor = MutedText
+                        )
                     )
                     OutlinedTextField(
                         value = referralInput,
@@ -2448,7 +2627,17 @@ fun CheckoutScreen(viewModel: BeastViewModel, innerPadding: PaddingValues) {
                         label = { Text("Referrer's unique code (points back)") },
                         shape = RoundedCornerShape(12.dp),
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = SecondaryCharcoal,
+                            unfocusedTextColor = SecondaryCharcoal,
+                            focusedBorderColor = PrimaryLime,
+                            unfocusedBorderColor = Color.LightGray,
+                            focusedContainerColor = Color.White,
+                            unfocusedContainerColor = Color.White,
+                            focusedLabelColor = SecondaryCharcoal,
+                            unfocusedLabelColor = MutedText
+                        )
                     )
                 }
             }
@@ -2758,7 +2947,10 @@ fun ProfileScreen(viewModel: BeastViewModel, innerPadding: PaddingValues) {
 
         if (orders.isEmpty()) {
             Box(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .padding(24.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -2773,7 +2965,9 @@ fun ProfileScreen(viewModel: BeastViewModel, innerPadding: PaddingValues) {
                         text = "No recorded orders in tracking backlog",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
-                        color = SecondaryCharcoal.copy(alpha = 0.6f)
+                        color = SecondaryCharcoal.copy(alpha = 0.6f),
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
             }
@@ -3134,7 +3328,17 @@ fun ReviewsScreen(viewModel: BeastViewModel, innerPadding: PaddingValues) {
                             placeholder = { Text("What did you enjoy about the fit, comfort or aesthetic?") },
                             shape = RoundedCornerShape(12.dp),
                             modifier = Modifier.fillMaxWidth(),
-                            maxLines = 3
+                            maxLines = 3,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = SecondaryCharcoal,
+                                unfocusedTextColor = SecondaryCharcoal,
+                                focusedBorderColor = PrimaryLime,
+                                unfocusedBorderColor = Color.LightGray,
+                                focusedContainerColor = Color.White,
+                                unfocusedContainerColor = Color.White,
+                                focusedPlaceholderColor = MutedText,
+                                unfocusedPlaceholderColor = MutedText
+                            )
                         )
 
                         Spacer(modifier = Modifier.height(12.dp))

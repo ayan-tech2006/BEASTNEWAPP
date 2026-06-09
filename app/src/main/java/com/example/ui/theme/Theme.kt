@@ -41,11 +41,11 @@ private val DarkColorScheme = darkColorScheme(
 
 @Composable
 fun MyApplicationTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    darkTheme: Boolean = false, // Force Light mode for consistent "Minimalist Luxury" centered on Off-White #F9F9F9
     content: @Composable () -> Unit
 ) {
     // Keep a premium, highly-branded minimalist look
-    val colors = if (darkTheme) DarkColorScheme else LightColorScheme
+    val colors = LightColorScheme // Always use LightColorScheme for pristine minimalist luxury
 
     MaterialTheme(
         colorScheme = colors,
