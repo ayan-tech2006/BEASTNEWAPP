@@ -1,0 +1,6 @@
+{
+  "name": "Beast Sports",
+  "description": "High-conversion premium e-commerce Android application for athletic gear, garments, and casual wear.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
